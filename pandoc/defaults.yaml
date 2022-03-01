@@ -1,0 +1,12 @@
+data-dir: ./pandoc
+
+filters:
+  - org-filter.lua
+
+to: html5
+
+template: pandoc/templates/output.ext
+
+
+table-of-contents: false
+toc-depth: 1
