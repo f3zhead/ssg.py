@@ -1,8 +1,4 @@
 #!/usr/bin/python
-# todo:
-# uh redo ignore cuz globs weird
-# make pandoc do the heavy lifting cause regex sux
-# all that render_thingy stuff
 
 import os
 import glob
