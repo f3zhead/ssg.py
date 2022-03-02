@@ -14,18 +14,19 @@ import subprocess
 import datetime
 
 # i will SOLVE EVERYTHING with OOP!!!
-class entry:
-    def __init__(self, path):
-        self.path = path
-        # rendered contents
-        self.contents = None
-        # metadata
-        # self.metadata = None
-        self.date = None
-        self.title = None
-        # local path (add base_url, source_dir, dest_dir later)
-        self.source_path = os.path.join(source_dir, path)
-        self.dest_path = os.path.join(dest_dir, os.path.splitext(path)[0] + '.html')
+# ackshually im too lazy to use oop rignt now, i'll do it another ay
+#class entry:
+#    def __init__(self, path):
+#        self.path = path
+#        # rendered contents
+#        self.contents = None
+#        # metadata
+#        # self.metadata = None
+#        self.date = None
+#        self.title = None
+#        # local path (add base_url, source_dir, dest_dir later)
+#        self.source_path = os.path.join(source_dir, path)
+#        self.dest_path = os.path.join(dest_dir, os.path.splitext(path)[0] + '.html')
 
 USAGE = "ssg.py src dst title base_url"
 
@@ -74,7 +75,7 @@ def ignore_files():
         # fail quietly
         pass
     # convert ignore_files to tuple (or should I use a set?)
-    # haha im so clever
+    # haha im so clever i use both
     return tuple(set(ignore_files))
 
 def print_status(items, singular, plural):
