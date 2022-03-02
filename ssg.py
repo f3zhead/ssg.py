@@ -1,10 +1,7 @@
 #!/usr/bin/python
 # todo:
 # uh redo ignore cuz globs weird
-# global variables and shit
-# print_status
 # make pandoc do the heavy lifting cause regex sux
-# change pypandoc to subprocess
 # all that render_thingy stuff
 
 import os
@@ -13,8 +10,8 @@ import re
 import sys
 import fnmatch
 import shutil
-# import subprocess
-import pypandoc
+import subprocess
+import datetime
 
 USAGE = "ssg.py src dst title base_url"
 
@@ -58,8 +55,16 @@ def ignore_files():
     # haha im so clever
     return tuple(set(ignore_files))
 
-def print_status():
-    pass
+def print_status(items, singular, plural):
+    num_items = len(items)
+    if num_items == 0:
+        output = "no {}".format(plural)
+    elif num_items == 1:
+        output = "{} {}".format(num_items, singular)
+    else:
+        output = "{} {}".format(num_items, plural)
+    print(output, file=sys.stderr)
+
 
 def copy_dirs(source_dir, dest_dir):
     # ignore all files
@@ -75,28 +80,9 @@ def copy_dirs(source_dir, dest_dir):
     # copy subdirectories of src to dst, ignore stuff
     shutil.copytree(source_dir, dest_dir, ignore=_ignore_files, dirs_exist_ok=True)
 
-def list_subdirectories(directory):
-    dir_list = []
-    ignored = []
-    # remove trailing slashes, just to be safe
-    # or i can use os.path.split and os.path.join? i dunno
-    directory = os.path.normpath(directory)
-    # recursively search for files, ignore those in IGNORE and hidden files
-    for root, directories, files in os.walk(directory, topdown=True):
-        for pattern in IGNORE:
-            ignored.extend(fnmatch.filter(directories, pattern))
-        directories[:] = [d for d in directories if d not in ignored]
-        for dir_name in directories:
-            dir_path = os.path.join(root, filename)
-            dir_list.append(filepath)
-    return dir_list
-
 def list_files(directory):
     file_list = []
     ignored = []
-    # remove trailing slashes, just to be safe
-    # or i can use os.path.split and os.path.join? i dunno
-    ## directory = directory.rstrip("/")
     # recursively search for files, ignore those in IGNORE and hidden files
     for root, directories, files in os.walk(directory, topdown=True):
         for pattern in IGNORE:
@@ -112,8 +98,6 @@ def list_affected_files(directory, dest_files):
     file_list = []
     has_partials = []
     last_modification = os.stat(dest_files).st_atime
-    ## remove trailing slashes, just to be safe
-    ## directory = directory.rstrip("/")
     # recursively search for files, ignore those in IGNORE
     for root, directories, files in os.walk(directory, topdown=True):
         # create list of files to be ignored
@@ -136,14 +120,18 @@ def list_affected_files(directory, dest_files):
 def list_pages(directory):
     # oh god regex no no no
     pages = list_files(directory)
-    for page in pages:
+    pages = [page for page in pages if page.endswith(MARKUP_EXTENSIONS)]
+    for i in range(len(pages)):
+        # remove extra cruft at the beginning of the path
+        pages[i] = pages[i].replace(source_dir + '/', '')
         # should i compile into regex object?
-        if page.endswith('/index.html'):
-            page = re.sub("/index.html", "/", page)
-        if page.endswith('.md'):
-            page = re.sub(".md", ".html", page)
-        if page.beginswith("./"):
-            page = re.sub("^./", "", page)
+        if pages[i].endswith('/index.html'):
+            pages[i] = re.sub("/index.html", "/", pages[i])
+        if pages[i].endswith('.md'):
+            pages[i] = re.sub(".md", ".html", pages[i])
+        if pages[i].startswith("./"):
+            pages[i] = re.sub("^./", "", pages[i])
+        print(pages[i])
     return pages
 
 
@@ -175,36 +163,35 @@ def render_html_file(body, title):
             result = '\n'.join((result, line))
     result = '\n'.join((result, body, FOOTER))
     return result
-        # more stuff blah blah blah
-
 
 def render_markup_files(files, src, dst, title):
     import json
+
     for f in files:
         output_path = (os.path.splitext(f)[0] + ".html").replace(src, dst, 1)
-        # try:
-        rendered_html = pypandoc.convert_file(source_file=f, to="html", extra_args=["--quiet", "--defaults=pandoc/defaults.yaml"])
-        # skip index
-        if os.path.basename(output_path) != "index.html":
-            file_metadata = json.loads(pypandoc.convert_file(source_file=f, to="html", extra_args=["--quiet", "--template=pandoc/templates/metadata.ext"]))
-            # convert all dictionary keys to lowercase
-            file_metadata = {k.lower(): v for k, v in file_metadata.items()}
-            date = file_metadata['date']
-            title = file_metadata['title']
-            header = "{}\n<p class=\"date\" {} </p>".format(title, date)
-            complete_file = '\n'.join((header, rendered_html))
-            # don't make function to render_toc
-            # use pandoc yaml metadata toc option in the md files instead
-            output_html = render_html_file(complete_file, title)
-        else:
-            # don't need date, title and toc for index.html
-            # output_html = rendered_html
-            output_html = render_html_file(rendered_html, title)
-        with open(output_path, 'w') as output:
-            output.write(output_html)
-        # except RuntimeError:
-        #     print("Could not render file: {}".format(f))
-        #     raise SystemExit
+        try:
+            rendered_html = subprocess.run(['pandoc', '--to=html', '--quiet', '--defaults=pandoc/defaults.yaml', f], capture_output=True).stdout.decode('utf-8')
+            # skip index
+            if os.path.basename(output_path) != "index.html":
+                file_metadata = json.loads(subprocess.run(['pandoc', '--to=html', '--quiet', '--template=pandoc/templates/metadata.ext', f], capture_output=True).stdout.decode('utf-8'))
+                # convert all dictionary keys to lowercase
+                file_metadata = {k.lower(): v for k, v in file_metadata.items()}
+                date = file_metadata['date']
+                title = file_metadata['title']
+                header = "{}\n<p class=\"date\" {} </p>".format(title, date)
+                complete_file = '\n'.join((header, rendered_html))
+                # don't make function to render_toc
+                # use pandoc yaml metadata toc option in the md files instead
+                output_html = render_html_file(complete_file, title)
+            else:
+                # don't need date, title and toc for index.html
+                # output_html = rendered_html
+                output_html = render_html_file(rendered_html, title)
+            with open(output_path, 'w') as output:
+                output.write(output_html)
+        except RuntimeError:
+            print("Could not render file: {}".format(f))
+            raise SystemExit
 
 def render_html_files(files, src, dst, title):
     for f in files:
@@ -216,9 +203,84 @@ def render_html_files(files, src, dst, title):
             output.write(output_text)
 
 
-def render_article_list(urls, base_url, source_dir, dest_dir):
-    # hehe i'll do this later
-    pass
+def render_sitemap(urls, base_url):
+    today = str(datetime.date.today())
+    output = """<?xml version="1.0" encoding="UTF-8"?>
+	<urlset
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+	http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd"
+	xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    """
+    for url in urls:
+        output = '\n'.join((output, "<url><loc>{}/{}</loc><lastmod>{}</lastmod><priority>1.0</priority></url>".format(base_url, url, today)))
+    output = '\n'.join((output, "</urlset>"))
+    with open(os.path.join(dest_dir, 'sitemap.xml'), 'w') as sitemap:
+        sitemap.write(output)
+
+def render_article_list(urls, base_url):
+    # gaaah this is so inefficient, reads every file twice for date
+    items = ""
+    urls_sorted = []
+    for i in urls:
+        i = os.path.join(source_dir, i)
+        if not i.endswith("/index.html") and not i.endswith("/contact.html"):
+            markup_file_path = os.path.splitext(i)[0] + '.md'
+            with open(markup_file_path) as f:
+                    contents = f.read()
+                    has_date = re.search(r'\b(Date|date)\b\s*:(.*)', contents)
+                    page_date = has_date.string[has_date.start():has_date.end()]
+                    page_date = re.sub(r'\b(Date|date)\b\s*:\s*', '', page_date)
+                    url = [page_date, i.replace(source_dir + '/', '')]
+                    urls_sorted.append(url)
+    urls_sorted.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m-%d'), reverse=True)
+    urls_sorted = [q[1] for q in urls_sorted]
+    for url in urls_sorted:
+           # ughhh i already had the metadata, now i have to parse it AGAIN AAAAAAAAAAAAAAAAAAHHHHHHHH
+        real_path = os.path.splitext(os.path.join(source_dir, url))[0] + '.md'
+        print(real_path)
+        with open(real_path) as f:
+            contents = f.read()
+            # geezus look at this. This sucks!
+            # has_title = re.search(r'\s*\b(Title|title)\b:(.*)', contents)
+            # has_date = re.search(r'\s*\b(Date|date)\b:(.*)', contents)
+            has_title = re.search(r'\b(Title|title)\b\s*:(.*)', contents)
+            has_date = re.search(r'\b(Date|date)\b\s*:(.*)', contents)
+            page_title = has_title.string[has_title.start():has_title.end()]
+            page_date = has_date.string[has_date.start():has_date.end()]
+            # get rid of "title:" and "date:"
+            page_title = re.sub(r'\b(Title|title)\b\s*:\s*', '', page_title)
+            page_date = re.sub(r'\b(Date|date)\b\s*:\s*', '', page_date)
+            # remove cruft at beginning of file
+            url = os.path.join(base_url, url)
+            item = "<li><a href=\"{}\">{}</a><p class=\"date\"{}</p></li>".format(url, page_title, page_date)
+            # k this kinda sucks too
+            items = items + item
+
+    with open(os.path.join(dest_dir, 'index.html'), 'r+') as index:
+        contents = index.read()
+        # gotta do this extra stuff because i opened as r+
+        index.seek(0)
+        # don't touch article list if same otherwise replace
+        if "<ul class=\"articles\">{}</ul>".format(items) not in contents:
+            contents = re.sub(r"(.*)<ul class=\"articles\">(.*)", "<ul class=\"articles\">{}</ul>".format(items), contents)
+        if "<ul class=\"articles\">" not in contents:
+            contents = contents.replace("</article>", "<ul class=\"articles\">{}</ul></article>".format(items))
+        print(contents)
+        index.write(contents)
+        index.truncate()
+
+
+def render_feeds():
+    try:
+        from feedgen.feed import FeedGenerator
+        fg = FeedGenerator()
+        fg.id(base_url)
+
+
+    except ModuleNotFoundError:
+        print("Feedgen module not installed, cannot render RSS and Atom feeds!", file=sys.stderr)
+
 
 def check_deps():
     if not shutil.which("pandoc"):
@@ -228,14 +290,14 @@ def check_deps():
 
 def main():
     args = parse_arguments()
-    global source_dir, dest_dir
+    global source_dir, dest_dir, base_url
     source_dir = readlink_file(args.src)
     dest_dir = readlink_file(args.dst)
+    base_url = args.base_url
     # should this be before initialization of source_dir
     if (not os.path.isdir(source_dir)) or (not os.path.isdir(dest_dir)):
         print("No such directory")
         raise SystemExit
-
     global IGNORE, MARKUP_EXTENSIONS, PARTIAL_EXTENSIONS
     IGNORE = ignore_files()
     MARKUP_EXTENSIONS = ('.md', '.org')
@@ -284,20 +346,28 @@ def main():
         html_files = []
         other_files = []
         for f in files:
-            if f.endswith(MARKUP_EXTENSIONS):
-                markup_files.append(f)
-            elif f.endswith('.html'):
+            if f.endswith('.html'):
                 html_files.append(f)
+            elif f.endswith(MARKUP_EXTENSIONS):
+                markup_files.append(f)
             else:
                 other_files.append(f)
 
         render_markup_files(markup_files, source_dir, dest_dir, title)
         render_html_files(html_files, source_dir, dest_dir, title)
+        # copy other files
+        for f in other_files:
+            shutil.copy2(f, f.replace(source_dir, dest_dir))
+
+        print("[ssg.py]", file=sys.stderr)
+        print_status(files, 'file ', 'files ')
     # add more exceptions later
     # except:
     #     print("Could not write to {}!".format(dest_file_list))
 
-
-
+    urls = list_pages(source_dir)
+    if urls:
+        render_sitemap(urls, base_url)
+        render_article_list(urls, base_url)
 
 main()
