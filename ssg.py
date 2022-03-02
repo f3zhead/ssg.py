@@ -13,6 +13,20 @@ import shutil
 import subprocess
 import datetime
 
+# i will SOLVE EVERYTHING with OOP!!!
+class entry:
+    def __init__(self, path):
+        self.path = path
+        # rendered contents
+        self.contents = None
+        # metadata
+        # self.metadata = None
+        self.date = None
+        self.title = None
+        # local path (add base_url, source_dir, dest_dir later)
+        self.source_path = os.path.join(source_dir, path)
+        self.dest_path = os.path.join(dest_dir, os.path.splitext(path)[0] + '.html')
+
 USAGE = "ssg.py src dst title base_url"
 
 
@@ -27,6 +41,14 @@ def parse_arguments():
             help='Website title')
     parser.add_argument('base_url',
             help='Base url of your website')
+    parser.add_argument('author',
+            help='Author of your website (for RSS and Atom feeds)',
+            default='N/A',
+            nargs='?')
+    parser.add_argument('description',
+            help='Description of your website (for RSS feed)',
+            default='my website',
+            nargs='?')
     args = parser.parse_args()
     return args
 
@@ -224,7 +246,7 @@ def render_article_list(urls, base_url):
     urls_sorted = []
     for i in urls:
         i = os.path.join(source_dir, i)
-        if not i.endswith("/index.html") and not i.endswith("/contact.html"):
+        if not i.endswith(("/index.html", "/contact.html")):
             markup_file_path = os.path.splitext(i)[0] + '.md'
             with open(markup_file_path) as f:
                     contents = f.read()
@@ -266,20 +288,59 @@ def render_article_list(urls, base_url):
             contents = re.sub(r"(.*)<ul class=\"articles\">(.*)", "<ul class=\"articles\">{}</ul>".format(items), contents)
         if "<ul class=\"articles\">" not in contents:
             contents = contents.replace("</article>", "<ul class=\"articles\">{}</ul></article>".format(items))
-        print(contents)
         index.write(contents)
         index.truncate()
 
 
-def render_feeds():
+def render_feeds(urls, author):
+    def _create_id(url, page_date):
+        result = url.split(sep='://',maxsplit=1)[1]
+        parts = result.split(sep='/',maxsplit=1)
+        result = parts[0]+','+page_date+':'+parts[1]
+        return result
+    def _get_article(url):
+        rendered_output_path = os.path.join(dest_dir, url)
+        with open(rendered_output_path) as rendered_output:
+            contents = rendered_output.read()
+            # why tf is it making the string hang
+            has_article = re.search(r'\s*(<article>)[\s\S]*(</article>)', contents)
+            article = has_article.string[has_article.start():has_article.end()]
+            article = re.sub(r'(<article>|</article>)', '', article)
+            article = re.sub(r'(^\s*|\s*$)', '', article)
+            return article
     try:
         from feedgen.feed import FeedGenerator
         fg = FeedGenerator()
-        fg.id(base_url)
+        fg.id(_create_id(base_url,str(datetime.date.today())))
+        fg.title(title)
+        fg.author({'name':author,  'email':' '})
+        fg.link(href=base_url, rel='self')
+        fg.description(website_description)
+        for url in urls:
+            if not url.endswith(("index.html", "contact.html")):
+                local_path = os.path.splitext(os.path.join(source_dir, url))[0] + '.md'
+                with open(local_path) as f:
+                    contents = f.read()
+                    has_title = re.search(r'\b(Title|title)\b\s*:(.*)', contents)
+                    has_date = re.search(r'\b(Date|date)\b\s*:(.*)', contents)
+                    page_title = has_title.string[has_title.start():has_title.end()]
+                    page_date = has_date.string[has_date.start():has_date.end()]
+                    # get rid of "title:" and "date:"
+                    page_title = re.sub(r'\b(Title|title)\b\s*:\s*', '', page_title)
+                    page_date = re.sub(r'\b(Date|date)\b\s*:\s*', '', page_date)
 
+                website_url = os.path.join(base_url, url)
+                fe = fg.add_entry()
+                fe.id(_create_id(website_url, page_date))
+                fe.link(href=website_url)
+                fe.description(_get_article(url))
+                fe.title(page_title)
+                # fe.pubDate(datetime.datetime.strptime(page_date, '%Y-%m-%d'))
+        fg.atom_file(os.path.join(dest_dir, 'atom.xml'))
+        fg.rss_file(os.path.join(dest_dir, 'rss.xml'))
 
     except ModuleNotFoundError:
-        print("Feedgen module not installed, cannot render RSS and Atom feeds!", file=sys.stderr)
+        print("Note: Feedgen module not found, cannot render RSS and Atom feeds!", file=sys.stderr)
 
 
 def check_deps():
@@ -290,10 +351,12 @@ def check_deps():
 
 def main():
     args = parse_arguments()
-    global source_dir, dest_dir, base_url
+    global source_dir, dest_dir, base_url, author, website_description
     source_dir = readlink_file(args.src)
     dest_dir = readlink_file(args.dst)
     base_url = args.base_url
+    author = args.author
+    website_description = args.description
     # should this be before initialization of source_dir
     if (not os.path.isdir(source_dir)) or (not os.path.isdir(dest_dir)):
         print("No such directory")
@@ -369,5 +432,6 @@ def main():
     if urls:
         render_sitemap(urls, base_url)
         render_article_list(urls, base_url)
+        render_feeds(urls,author)
 
 main()
