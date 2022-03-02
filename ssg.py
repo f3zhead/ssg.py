@@ -197,7 +197,7 @@ def render_markup_files(files, src, dst, title):
                 file_metadata = {k.lower(): v for k, v in file_metadata.items()}
                 date = file_metadata['date']
                 title = file_metadata['title']
-                header = "<p class=\"date\" {} </p>".format(date)
+                header = "<h1 class=\"title\">{}</h1>\n<p class=\"date\"> {} </p>".format(title,date)
                 complete_file = '\n'.join((header, rendered_html))
                 # don't make function to render_toc
                 # use pandoc yaml metadata toc option in the md files instead
@@ -272,7 +272,7 @@ def render_article_list(urls, base_url):
             page_date = re.sub(r'\b(Date|date)\b\s*:\s*', '', page_date)
             # remove cruft at beginning of file
             url = os.path.join(base_url, url)
-            item = "<li><a href=\"{}\">{}</a><p class=\"date\"{}</p></li>".format(url, page_title, page_date)
+            item = "<li><a href=\"{}\">{}</a><p class=\"date\">{}</p></li>".format(url, page_title, page_date)
             # k this kinda sucks too
             items = items + item
 
