@@ -197,7 +197,7 @@ def render_markup_files(files, src, dst, title):
                 file_metadata = {k.lower(): v for k, v in file_metadata.items()}
                 date = file_metadata['date']
                 title = file_metadata['title']
-                header = "{}\n<p class=\"date\" {} </p>".format(title, date)
+                header = "<p class=\"date\" {} </p>".format(date)
                 complete_file = '\n'.join((header, rendered_html))
                 # don't make function to render_toc
                 # use pandoc yaml metadata toc option in the md files instead
