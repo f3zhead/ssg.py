@@ -5,7 +5,7 @@ This is essentially a python drop-in replacement for pryme-svg's [modified versi
 
 **License:** GPLv3 or later
 
-**Dependencies:**
+**Dependencies:**  
 python >= 3.5  
 [pandoc](https://github.com/jgm/pandoc)  
 [python-feedgen](https://github.com/lkiesow/python-feedgen) (optional, for generating RSS and Atom feeds)
